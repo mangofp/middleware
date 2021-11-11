@@ -1,4 +1,10 @@
 import express from 'express' 
+import { 
+    addUser, 
+    verifyUserPassword, 
+    generateSession,
+    getUserFromToken
+} from './app/controllers/user.js'
 
 const app = express()
 
@@ -7,23 +13,9 @@ function logRequest(req, res, next) {
     next()
 }
 
-const activeSessions = [
-    {session: "awsldfjqpwoeu298234", user: "john@doe.com"},
-    {session: "qwe698werqweroiyuqw", user: "jane@doe.com"},
-]
-
-function getUser(session) {
-    const foundSession = activeSessions.find(s => s.session === session)
-    if (!foundSession) {
-        return false
-    }
-
-    return foundSession.user
-}
-
 function checkSession(req, res, next) {
     if (req.query.session) {
-        const user = getUser(req.query.session)
+        const user = getUserFromToken(req.query.session)
         if (!user) {
             res.status(400).send({error: "Unknown user"})
             return
@@ -37,7 +29,8 @@ function checkSession(req, res, next) {
 
 app.use(logRequest)
 app.use("/private", checkSession)
-
+app.use(express.json())
+ 
 app.get("/", (req, res) => {
     res.send("Hello esteemed user " + (req.user || "Unknown") )
 })
@@ -46,8 +39,26 @@ app.get("/private/greeting", (req, res) => {
     res.send("Hello esteemed user " + req.user)
 })
 
-app.post("/login", (req, res) => {
-    res.send("No implemented")
+app.post("/user", async (req, res) => {
+    const account = req.body.accountName
+    const password = req.body.password
+    const result = await addUser(account, password)
+    if (!result) {
+        res.status(406).send()
+        return false
+    }
+    
+    res.status(201).send()
+})
+
+app.post("/login", async (req, res) => {
+    if (await verifyUserPassword(req.body.accountName, req.body.password)) {
+        const sessionId = generateSession(req.body.accountName)
+        return res.status(200).send({sessionId})
+
+    } else {
+        res.status(400).send({error: "Wrong username or password"})
+    }
 })
 
 app.listen(8080, () => {console.log("App listening on 8080")})
